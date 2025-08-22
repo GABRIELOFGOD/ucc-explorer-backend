@@ -29,6 +29,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const RPC_WS = "ws://168.231.122.245:8546";
+const RPC_API = "http://168.231.122.245:8545";
 
 // Initialize Web3 with the RPC endpoint
 const web3 = new Web3('http://168.231.122.245:8545');
@@ -63,7 +64,7 @@ web3Ws.eth.subscribe('newBlockHeaders')
             tx.value,
             tx.gas,
             tx.gasPrice,
-            tx.timestamp
+            new Date(block.timestamp * 1000).toISOString()
           ]
         );
       }
@@ -329,6 +330,77 @@ app.get('/api/transactions', rateLimiter, async (req, res) => {
   } catch (error) {
     console.error("Error fetching transactions:", error);
     res.status(500).json({ error: "Failed to fetch transactions" });
+  }
+});
+
+// Get contracts
+// app.get('/api/contracts', rateLimiter, async (req, res) => {
+//   try {
+//     const { address } = req.query;
+//     // if (!address || !web3.utils.isAddress(address)) {
+//     //   return res.status(400).json({ error: "Invalid address" });
+//     // }
+//     const response = await fetch(RPC_API, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({
+//         "jsonrpc": "2.0",
+//         "method": "eth_call",
+//         "params": [
+//           {
+//             "to": "0xTokenContractAddress",
+//             "data": `0x70a08231000000000000000000000000${address.replace(/^0x/, '')}`
+//           },
+//           "latest"
+//         ],
+//         "id": 1
+//       })
+//     });
+//     console.log("REQUEST ", response);
+//     const data = await response.json();
+//     console.log('Token balance fetched successfully:', data);
+//   } catch (error) {
+//     console.error('Error fetching token balance:', error);
+//     res.status(500).json({ error: 'Failed to fetch token balance' });
+//   }
+// });
+
+app.get('/api/contracts', rateLimiter, async (req, res) => {
+  try {
+    const { address, token } = req.query;
+    if (!address || !web3.utils.isAddress(address)) {
+      return res.status(400).json({ error: "Invalid address" });
+    }
+
+    const data = web3.eth.abi.encodeFunctionCall({
+      name: 'balanceOf',
+      type: 'function',
+      inputs: [{ type: 'address', name: '_owner' }]
+    }, [address]);
+
+    const response = await fetch(RPC_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "eth_call",
+        params: [{ to: token, data }, "latest"],
+        id: 1
+      })
+    });
+
+    const result = await response.json();
+
+    if (result.error) {
+      throw new Error(result.error.message);
+    }
+
+    const rawBalance = web3.utils.toBN(result.result).toString();
+
+    res.json({ address, token, balance: rawBalance });
+  } catch (error) {
+    console.error("Error fetching token balance:", error);
+    res.status(500).json({ error: "Failed to fetch token balance" });
   }
 });
 
