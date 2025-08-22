@@ -49,7 +49,6 @@ web3Ws.eth.subscribe('newBlockHeaders')
     try {
       const block = await web3Ws.eth.getBlock(blockHeader.number, true);
       if (!block || block.transactions.length < 1) return;
-      const timestamp = block.timestamp;
 
       for (const tx of block.transactions) {
         await db.query(
@@ -64,7 +63,7 @@ web3Ws.eth.subscribe('newBlockHeaders')
             tx.value,
             tx.gas,
             tx.gasPrice,
-            timestamp
+            tx.timestamp
           ]
         );
       }
@@ -315,7 +314,7 @@ app.get('/api/transactions', rateLimiter, async (req, res) => {
         timestamp: row.timestamp,
         from: row.fromAddress,
         to: row.toAddress,
-        value: row.value,
+        value: web3.utils.fromWei(row.value, 'ether') + ' tUCC',
         gasUsed: row.gas,
         status: 'success' // Assuming success for simplicity
       });
@@ -330,6 +329,18 @@ app.get('/api/transactions', rateLimiter, async (req, res) => {
   } catch (error) {
     console.error("Error fetching transactions:", error);
     res.status(500).json({ error: "Failed to fetch transactions" });
+  }
+});
+
+// Get all addresses
+app.get('/api/addresses', rateLimiter, async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const addresses = await getAllAddresses(page, limit);
+    res.json({ type: 'addresses', data: addresses });
+  } catch (error) {
+    console.error('Error fetching all addresses:', error);
+    res.status(500).json({ error: 'Failed to fetch all addresses' });
   }
 });
 
